@@ -8,12 +8,57 @@ const MAX_STRING_BYTES: usize = 255;
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 #[program]
-pub mod solana_email_box {
+pub mod messenger {
     use super::*;
+    #[allow(unused_variables)] // `message_seed` used in `init` of `SendDirectMessage`
+    pub fn send_direct_message(
+        ctx: Context<SendDirectMessage>,
+        message_seed: Vec<u8>,
+        ciphertext: Vec<u8>,
+    ) -> Result<()> {
+        if ciphertext.len() > MAX_STRING_BYTES {
+            return err!(ChatError::MessageTextTooLarge);
+        }
 
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+        // Set message data
+        ctx.accounts.message.from = ctx.accounts.message.from.key();
+        ctx.accounts.message.ciphertext = ciphertext;
+
+        // Add message in inbox
+        ctx.accounts.message.inbox = ctx.accounts.mailbox.inbox;
+        ctx.accounts.mailbox.inbox = Some(ctx.accounts.message.key());
         Ok(())
     }
+}
+
+pub fn mailbox_pda(owner: &Pubkey) -> Pubkey {
+    let seed = [owner.as_ref()];
+    let (pda, _chat_bump) = Pubkey::find_program_address(&seed, &ID);
+    pda
+}
+
+pub fn send_direct_mesage(
+    sender: Pubkey,
+    receiver: Pubkey,
+    message_seed: Vec<u8>,
+    message_pda: Pubkey,
+    ciphertext: Vec<u8>,
+) -> Instruction {
+    let instruction = instruction::SendDirectMessage {
+        message_seed,
+        ciphertext,
+    };
+    Instruction::new_with_bytes(
+        ID,
+        &instruction.data(),
+        vec![
+            AccountMeta::new(sender, true),
+            AccountMeta::new_readonly(receiver, false),
+            AccountMeta::new(mailbox_pda(&receiver), false),
+            AccountMeta::new(message_pda, false),
+            AccountMeta::new(solana_program::system_program::ID, false),
+        ],
+    )
 }
 
 #[derive(Accounts)]
@@ -53,4 +98,10 @@ pub struct Message {
     pub from: Pubkey,
     pub inbox: Option<Pubkey>,
     pub ciphertext: Vec<u8>,
+}
+
+#[error_code]
+pub enum ChatError {
+    #[msg("Message text is too many bytes (maximum of 255 bytes)")]
+    MessageTextTooLarge,
 }
