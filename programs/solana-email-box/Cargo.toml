@@ -15,6 +15,11 @@ no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []
 
+[dev-dependencies]
+solana-program-test = "1.15.2"
+solana-sdk = "1.15.2"
+rand = "0.8.5"
+
 [dependencies]
 anchor-lang = { version = "0.27.0", features = ["init-if-needed"] }
 solana-program = "1.15.2"
