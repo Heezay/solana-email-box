@@ -1,4 +1,4 @@
-Cargo.lock
+.lock
 .anchor
 .DS_Store
 target

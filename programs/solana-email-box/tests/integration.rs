@@ -1,4 +1,4 @@
-use anchor_lang::{accounts::program, AccountDeserialize};
+use anchor_lang::AccountDeserialize;
 use rand::Rng;
 use solana_email_box::{mailbox_pda, messenger, send_direct_mesage, Mailbox, Message};
 use solana_program::instruction::Instruction;
@@ -8,10 +8,15 @@ use solana_sdk::{
     transaction::Transaction,
 };
 
+/// cargo test-sbf
 #[tokio::test]
 async fn test_program() {
     let mut validator = ProgramTest::default();
-    validator.add_program("program", messenger::ID, processor!(messenger::entry));
+    validator.add_program(
+        "solana_email_box",
+        messenger::ID,
+        processor!(messenger::entry),
+    );
     let alpha = add_account(&mut validator);
     let beta = add_account(&mut validator);
 
@@ -33,10 +38,12 @@ async fn test_program() {
         .unwrap()
         .is_none());
 
+    // Send first message 
     let ciphertext: Vec<u8> = "Hello".into();
-    let first_message_pda = send_direct_message(&mut context, &alpha, &beta.pubkey(), ciphertext)
-        .await
-        .unwrap();
+    let first_message_pda =
+        send_direct_message(&mut context, &alpha, beta.pubkey(), ciphertext.clone())
+            .await
+            .unwrap();
 
     let message = context
         .banks_client
@@ -56,6 +63,7 @@ async fn test_program() {
     let chat_data = Mailbox::try_deserialize(&mut chat.data.as_ref()).unwrap();
     assert_eq!(chat_data.inbox, Some(first_message_pda));
 
+    // Send second message 
     let encrypted_response: Vec<u8> = "Hi! Who's this?".into();
     let second_message_pda = send_direct_message(
         &mut context,
@@ -84,6 +92,7 @@ async fn test_program() {
     assert_eq!(chat_data.inbox, Some(second_message_pda));
 }
 
+/// Specify the instruction and send a transaction 
 async fn send_direct_message(
     context: &mut ProgramTestContext,
     sender: &Keypair,
@@ -92,14 +101,19 @@ async fn send_direct_message(
 ) -> Result<Pubkey, BanksClientError> {
     let from_pubkey = sender.pubkey();
     let seed: [u8; 8] = rand::thread_rng().gen();
-    let (message_pda, _bump) = Pubkey::find_program_address(&[&seed], &program::ID);
-    let instruction =
-        send_direct_mesage(sender, receiver, seed.into(), message_pda, encrypted_text);
+    let (message_pda, _bump) = Pubkey::find_program_address(&[&seed], &messenger::ID);
+    let instruction = send_direct_mesage(
+        sender.pubkey(),
+        receiver,
+        seed.into(),
+        message_pda,
+        encrypted_text,
+    );
     execute(context, sender, &[instruction], vec![sender]).await?;
     Ok(message_pda)
 }
 
-/// Create new transaction instance, then send a transaction and return until the transaction has been finalized or rejected  
+/// Create a new transaction instance, then send the transaction and return until the transaction has been finalized or rejected  
 async fn execute(
     context: &mut ProgramTestContext,
     payer: &Keypair,
@@ -115,6 +129,7 @@ async fn execute(
     context.banks_client.process_transaction(transaction).await
 }
 
+/// Create a new account with shared data and add it to the test environment 
 fn add_account(validator: &mut ProgramTest) -> Keypair {
     let keypair = Keypair::new();
     let account = AccountSharedData::new(1_000_000_000, 0, &solana_sdk::system_program::id());
